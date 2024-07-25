@@ -1,0 +1,356 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRoles {
+  OWNER
+  ADMIN
+  USER
+  ASSISTANT
+  SELLER
+  SUPERVISOR
+  DIRECTOR
+  FINANCIAL
+  HR
+  SAC
+  GUEST
+}
+
+enum UserSectors {
+  MANAGER
+  DIRECTOR
+  ASSISTANT
+  IT
+  MARKETING
+  SALES
+  BILLING
+  FINANCE
+  HR
+  SAC
+  GUEST
+}
+
+enum CustomerType {
+  CPF
+  CNPJ
+}
+
+enum EntityType {
+  USER
+  STORE
+  CUSTOMER
+  ORDER
+  SERVICE
+  SUB_SERVICE
+}
+
+enum EntityMediaType {
+  ORDER
+  SERVICE
+  SUB_SERVICE
+}
+
+enum PaymentType {
+  PIX
+  CASH
+  CARD
+}
+
+model UserTokens {
+  id      String @id @db.Uuid
+  token   String @db.Uuid
+  user    User   @relation(fields: [user_id], references: [id])
+  user_id String @db.Uuid
+
+  @@map("users_tokens")
+}
+
+model User {
+  id               String        @id @db.Uuid
+  name             String        @db.VarChar(255)
+  email            String        @unique @db.VarChar(255)
+  document         String        @unique @db.VarChar(14)
+  status           Boolean       @default(false)
+  password         String        @db.VarChar(100)
+  avatar           String?       @db.Text
+  roles            UserRoles[]   @default([USER])
+  sectors          UserSectors[] @default([MANAGER])
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  deleted_at       DateTime?     @db.Date
+  lgpd_excluded_at DateTime?     @db.Date
+  store            Store?        @relation(fields: [store_id], references: [id])
+  store_id         String?       @db.Uuid
+  userTokens       UserTokens[]
+
+  @@map("users")
+}
+
+model Store {
+  id                 String               @id @db.Uuid
+  name               String               @db.VarChar(255)
+  slogan             String?              @db.VarChar(255)
+  document           String               @unique @db.VarChar(18)
+  email              String               @unique @db.VarChar(255)
+  instagram          String?              @db.VarChar(255)
+  address            String               @db.VarChar(255)
+  cep                String               @db.VarChar(255)
+  complement         String?              @db.VarChar(255)
+  neighborhood       String               @db.VarChar(255)
+  number             String               @db.VarChar(255)
+  city               String               @db.VarChar(255)
+  state              String               @db.VarChar(255)
+  logo               String?              @db.Text
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
+  deleted_at         DateTime?            @db.Date
+  lgpd_excluded_at   DateTime?            @db.Date
+  users              User[]
+  stripeSubscription StripeSubscription?
+  services           Service[]
+  customers          Customer[]
+  orders             Order[]
+  media_types        MediaType[]
+  Appointment        Appointment[]
+  AppointmentService AppointmentService[]
+
+  @@map("stores")
+}
+
+model StripeSubscription {
+  id                  Int       @id @default(autoincrement())
+  store_id            String    @unique @db.Uuid
+  store               Store     @relation(fields: [store_id], references: [id])
+  customer_id         String    @unique
+  subscription_id     String    @unique
+  subscription_status Boolean   @default(false)
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime? @db.Date
+  lgpd_excluded_at    DateTime? @db.Date
+
+  @@index([subscription_status])
+  @@map("stripe_subscription")
+}
+
+model Service {
+  id                 String               @id @db.Uuid
+  store_id           String               @db.Uuid
+  store              Store                @relation(fields: [store_id], references: [id])
+  name               String               @db.VarChar(255)
+  value_fixed        Boolean              @default(false)
+  is_published       Boolean              @default(false)
+  retail             Decimal?             @db.Decimal(10, 2)
+  wholesale          Decimal?             @db.Decimal(10, 2)
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
+  deleted_at         DateTime?            @db.Date
+  sub_service        SubService[]
+  order_service      OrderService[]
+  order_sub_service  OrderSubService[]
+  AppointmentService AppointmentService[]
+
+  @@index([store_id])
+  @@map("services")
+}
+
+model SubService {
+  id                String            @id @db.Uuid
+  service_id        String            @db.Uuid
+  service           Service           @relation(fields: [service_id], references: [id])
+  name              String            @db.VarChar(255)
+  is_published      Boolean           @default(false)
+  retail            Decimal           @db.Decimal(10, 2)
+  wholesale         Decimal?          @db.Decimal(10, 2)
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
+  deleted_at        DateTime?         @db.Date
+  order_service     OrderService[]
+  order_sub_service OrderSubService[]
+
+  @@index([service_id])
+  @@map("sub_services")
+}
+
+model Customer {
+  id               String        @id @db.Uuid
+  store_id         String        @db.Uuid
+  store            Store         @relation(fields: [store_id], references: [id])
+  name             String        @db.VarChar(255)
+  email            String        @db.VarChar(255)
+  customer_type    CustomerType  @default(CPF)
+  document         String        @unique @db.VarChar(18)
+  instagram        String?       @db.VarChar(255)
+  birth_date       DateTime      @db.Date
+  address          String        @db.VarChar(255)
+  cep              String        @db.VarChar(255)
+  complement       String?       @db.VarChar(255)
+  neighborhood     String        @db.VarChar(255)
+  number           String        @db.VarChar(255)
+  city             String        @db.VarChar(255)
+  state            String        @db.VarChar(255)
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  deleted_at       DateTime?     @db.Date
+  lgpd_excluded_at DateTime?     @db.Date
+  orders           Order[]
+  Appointment      Appointment[]
+
+  @@unique([store_id, document])
+  @@index([store_id])
+  @@map("customers")
+}
+
+model Order {
+  id              String         @id @db.Uuid
+  customer_id     String         @db.Uuid
+  customer        Customer       @relation(fields: [customer_id], references: [id])
+  store_id        String         @db.Uuid
+  store           Store          @relation(fields: [store_id], references: [id])
+  retail          Decimal        @db.Decimal(10, 2)
+  wholesale       Decimal?       @db.Decimal(10, 2)
+  is_wholesale    Boolean        @default(false)
+  status          Boolean        @default(true)
+  payment_method  PaymentType    @default(CASH)
+  expiration_date DateTime?      @db.Date
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  deleted_at      DateTime?      @db.Date
+  order_service   OrderService[]
+
+  @@index([store_id, customer_id])
+  @@index([store_id])
+  @@index([customer_id])
+  @@map("orders")
+}
+
+model OrderService {
+  id                String            @id @db.Uuid
+  order_id          String            @db.Uuid
+  order             Order             @relation(fields: [order_id], references: [id])
+  service_id        String            @db.Uuid
+  service           Service           @relation(fields: [service_id], references: [id])
+  retail            Decimal?          @db.Decimal(10, 2)
+  wholesale         Decimal?          @db.Decimal(10, 2)
+  sub_service       SubService?       @relation(fields: [subServiceId], references: [id])
+  subServiceId      String?           @db.Uuid
+  order_sub_service OrderSubService[]
+
+  @@index([order_id])
+  @@index([service_id])
+  @@map("order_service")
+}
+
+model OrderSubService {
+  id               String       @id @db.Uuid
+  order_service_id String       @db.Uuid
+  order_service    OrderService @relation(fields: [order_service_id], references: [id])
+  service_id       String       @db.Uuid
+  service          Service      @relation(fields: [service_id], references: [id])
+  sub_service_id   String       @db.Uuid
+  sub_service      SubService   @relation(fields: [sub_service_id], references: [id])
+  retail           Decimal      @db.Decimal(10, 2)
+  wholesale        Decimal?     @db.Decimal(10, 2)
+
+  @@index([service_id])
+  @@index([sub_service_id])
+  @@map("order_sub_service")
+}
+
+model Contact {
+  id               String     @id @db.Uuid
+  type_entity      EntityType
+  entity_id        String     @db.Uuid
+  email            String?    @unique
+  number           String     @db.VarChar(11)
+  is_whatsapp      Boolean    @default(false)
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @updatedAt
+  deleted_at       DateTime?  @db.Date
+  lgpd_excluded_at DateTime?  @db.Date
+
+  @@index([type_entity])
+  @@map("contacts")
+}
+
+model Media {
+  id               String          @id @db.Uuid
+  url              String          @db.Text
+  alt_text         String?         @db.VarChar(255)
+  is_pre_service   Boolean         @default(false)
+  entity_type      EntityMediaType
+  entity_id        String          @db.Uuid
+  media_type       MediaType       @relation(fields: [media_type_id], references: [id])
+  media_type_id    String          @db.Uuid
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
+  deleted_at       DateTime?       @db.Date
+  lgpd_excluded_at DateTime?       @db.Date
+
+  @@index([entity_type, entity_id])
+  @@map("media")
+}
+
+model MediaType {
+  id         String    @id @db.Uuid
+  store_id   String    @db.Uuid
+  store      Store     @relation(fields: [store_id], references: [id])
+  name       String    @db.VarChar(255)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime? @db.Date
+  Media      Media[]
+
+  @@unique([store_id, name])
+  @@map("media_types")
+}
+
+model Appointment {
+  id                  String               @id @db.Uuid
+  customer_id         String               @db.Uuid
+  customer            Customer             @relation(fields: [customer_id], references: [id])
+  store_id            String               @db.Uuid
+  store               Store                @relation(fields: [store_id], references: [id])
+  retail              Decimal              @db.Decimal(10, 2)
+  wholesale           Decimal?             @db.Decimal(10, 2)
+  is_wholesale        Boolean              @default(false)
+  status              Boolean              @default(true)
+  payment_method      PaymentType          @default(CASH)
+  expiration_date     DateTime?            @db.Date
+  note                String               @db.Text
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  deleted_at          DateTime?            @db.Date
+  appointment_service AppointmentService[]
+
+  @@index([store_id, customer_id])
+  @@index([store_id])
+  @@index([customer_id])
+  @@map("appointments")
+}
+
+model AppointmentService {
+  id             String      @id @db.Uuid
+  appointment_id String      @db.Uuid
+  appointment    Appointment @relation(fields: [appointment_id], references: [id])
+  service_id     String      @db.Uuid
+  service        Service     @relation(fields: [service_id], references: [id])
+  store_id       String      @db.Uuid
+  store          Store       @relation(fields: [store_id], references: [id])
+
+  @@index([appointment_id])
+  @@index([service_id])
+  @@index([store_id])
+  @@map("appointment_service")
+}
