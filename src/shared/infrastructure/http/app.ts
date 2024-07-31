@@ -1,13 +1,21 @@
 /* eslint-disable no-console */
 import express, { NextFunction, Request, Response } from 'express';
+import session from 'express-session';
+import passport from 'passport';
 import routes from './routes';
 import DomainError from '@/shared/errors/domain-error';
 import { NotFoundError } from '@/shared/application/errors/not-found-error';
 import ApplicationError from '@/shared/errors/application-error';
+import '@/auth/infrastructure/passport/strategies/googleStrategy';
 
 const app = express();
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(session({ secret: 'SECRET', resave: false, saveUninitialized: false }));
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 app.use(routes);
 
