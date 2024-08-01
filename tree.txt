@@ -1,0 +1,49 @@
+.
+├── Dockerfile
+├── docker-compose.yml
+├── package-lock.json
+├── package.json
+├── src
+│   ├── auth
+│   │   ├── application
+│   │   │   └── http
+│   │   │       ├── controllers
+│   │   │       │   └── auth.controller.ts
+│   │   │       └── routes
+│   │   │           └── auth.routes.ts
+│   │   └── infrastructure
+│   │       └── passport
+│   │           ├── passport.service.ts
+│   │           └── strategies
+│   │               └── googleStrategy.ts
+│   └── shared
+│       ├── application
+│       │   └── errors
+│       │       ├── bad-request-error.ts
+│       │       ├── invalid-credentials-error.ts
+│       │       └── not-found-error.ts
+│       ├── domain
+│       │   └── conflict-error.ts
+│       ├── errors
+│       │   ├── application-error.ts
+│       │   └── domain-error.ts
+│       └── infrastructure
+│           ├── database
+│           │   └── prisma
+│           │       ├── migrations
+│           │       │   ├── 20240730130101_create_db
+│           │       │   │   └── migration.sql
+│           │       │   └── migration_lock.toml
+│           │       ├── prisma.service.ts
+│           │       └── schema.prisma
+│           ├── env-config
+│           │   └── env.ts
+│           └── http
+│               ├── app.ts
+│               ├── middlewares.ts
+│               ├── routes.ts
+│               └── server.ts
+├── tree.txt
+└── tsconfig.json
+
+21 directories, 25 files
