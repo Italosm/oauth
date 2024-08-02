@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { NextFunction, Request, Response } from 'express';
 import { prismaService } from '../../database/prisma/prisma.service';
 import { requiresAuth } from 'express-openid-connect';

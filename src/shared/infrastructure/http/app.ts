@@ -7,23 +7,12 @@ import { NotFoundError } from '@/shared/application/errors/not-found-error';
 import ApplicationError from '@/shared/errors/application-error';
 import { auth, requiresAuth } from 'express-openid-connect';
 import { prismaService } from '../database/prisma/prisma.service';
-import session from 'express-session';
 import ensureSingleSession from './middlewares/ensureSingleSession';
 import { env } from '../env-config/env';
 
 const app = express();
 
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use(
-  session({
-    secret: 'your-session-secret', // Substitua pelo seu segredo
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false, httpOnly: true },
-  }),
-);
 
 const config = {
   authRequired: false,
@@ -33,9 +22,7 @@ const config = {
   clientID: env.AUTH0_CLIENT_ID,
   issuerBaseURL: env.AUTH0_ISSUER_BASE_URL,
   afterCallback: async (req: Request, res: Response, session: any) => {
-    console.log(session);
     const idToken = session.id_token;
-
     if (!idToken) {
       throw new Error('ID token not found in session');
     }
@@ -45,7 +32,6 @@ const config = {
     if (!decodedToken) {
       throw new Error('Failed to decode ID token');
     }
-
     const user = {
       sub: decodedToken.sub,
       name: decodedToken.name,
@@ -82,35 +68,28 @@ const config = {
     });
 
     session.sessionToken = idToken;
-    req.session.token = idToken;
-    req.session.expires_at = sessionExpiry;
 
     return session;
   },
 };
 
-app.use(auth(config));
-
 routes.get('/', (req, res) => {
   return res.json({ message: 'Hello World!' });
 });
-
-app.get('/login', (req, res) => {
-  res.oidc.login({ returnTo: 'http://localhost:3333/profile' });
-});
+app.use(auth(config));
 
 app.use(ensureSingleSession);
 
 app.use(routes);
-app.get('/profile', (req, res) => {
-  res.json(req.oidc.user);
-});
-app.get('/logout', (req, res) => {
-  res.oidc.logout({ returnTo: 'https://localhost:3333/login' });
-  res.clearCookie('connect.sid'); // 'connect.sid' é o nome padrão do cookie da sessão
 
-  // Redireciona para a página de login
-  res.redirect('https://localhost:3333/login');
+app.get('/profile', (req, res) => {
+  res.json({
+    is_authenticated: req.oidc.isAuthenticated(),
+    user: req.oidc.user,
+  });
+});
+app.get('/sair', (req, res) => {
+  res.oidc.logout({ returnTo: '/' });
 });
 app.use((req: Request, res: Response, next: NextFunction) => {
   next(new NotFoundError(`Cannot find ${req.originalUrl} on this server`));
