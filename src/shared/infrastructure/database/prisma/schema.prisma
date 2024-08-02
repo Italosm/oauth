@@ -21,6 +21,11 @@ enum UserRoles {
   GUEST
 }
 
+enum Action {
+  LOGIN
+  LOGOUT
+}
+
 enum EntityType {
   USER
   USERTOKEN
@@ -50,10 +55,25 @@ model Session {
   session_ip String
   user       User     @relation(fields: [user_id], references: [id])
   token      String   @unique
+  action     Action   @default(LOGIN)
   created_at DateTime @default(now())
   expires_at DateTime
 
   @@map("sessions")
+}
+
+model RecordSession {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  session_ip String
+  user       User     @relation(fields: [user_id], references: [id])
+  token      String   @unique
+  action     Action   @default(LOGOUT)
+  created_at DateTime @default(now())
+  expired_in DateTime
+
+  @@index([user_id])
+  @@map("record_sessions")
 }
 
 model User {
@@ -76,6 +96,7 @@ model User {
   stripe_subscription StripeSubscription?
   address             UserAddress[]
   session             Session[]
+  RecordSession       RecordSession[]
 
   @@map("users")
 }

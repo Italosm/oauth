@@ -5,7 +5,7 @@ import routes from './routes';
 import DomainError from '@/shared/errors/domain-error';
 import { NotFoundError } from '@/shared/application/errors/not-found-error';
 import ApplicationError from '@/shared/errors/application-error';
-import { auth, requiresAuth } from 'express-openid-connect';
+import { auth } from 'express-openid-connect';
 import { prismaService } from '../database/prisma/prisma.service';
 import ensureSingleSession from './middlewares/ensureSingleSession';
 import { env } from '../env-config/env';
@@ -28,7 +28,7 @@ const config = {
     }
 
     const decodedToken: any = jwt.decode(idToken);
-    console.log(decodedToken);
+
     if (!decodedToken) {
       throw new Error('Failed to decode ID token');
     }
@@ -48,6 +48,23 @@ const config = {
           auth0_id: user.sub,
           name: user.name,
           email: user.email,
+        },
+      });
+    }
+
+    const currentSession = await prismaService.session.findMany({
+      where: { user_id: existingUser.id },
+    });
+
+    for (const sessionRecord of currentSession) {
+      await prismaService.recordSession.create({
+        data: {
+          user_id: sessionRecord.user_id,
+          session_ip: sessionRecord.session_ip,
+          token: sessionRecord.token,
+          action: sessionRecord.action,
+          created_at: sessionRecord.created_at,
+          expired_in: sessionRecord.expires_at,
         },
       });
     }
@@ -88,7 +105,36 @@ app.get('/profile', (req, res) => {
     user: req.oidc.user,
   });
 });
-app.get('/sair', (req, res) => {
+app.get('/sair', async (req, res) => {
+  const userId = req.oidc.user.sub;
+
+  if (userId) {
+    const existingUser = await prismaService.user.findUnique({
+      where: { auth0_id: userId },
+    });
+
+    if (existingUser) {
+      const currentSession = await prismaService.session.findMany({
+        where: { user_id: existingUser.id },
+      });
+
+      for (const sessionRecord of currentSession) {
+        await prismaService.recordSession.create({
+          data: {
+            user_id: sessionRecord.user_id,
+            session_ip: sessionRecord.session_ip,
+            token: sessionRecord.token,
+            created_at: sessionRecord.created_at,
+            expired_in: sessionRecord.expires_at,
+          },
+        });
+      }
+      await prismaService.session.deleteMany({
+        where: { user_id: existingUser.id },
+      });
+    }
+  }
+
   res.oidc.logout({ returnTo: '/' });
 });
 app.use((req: Request, res: Response, next: NextFunction) => {
