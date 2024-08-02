@@ -23,16 +23,8 @@ enum UserRoles {
 
 enum EntityType {
   USER
-  UserToken
-  Provider
-  StripeSubscription
-}
-
-enum ProviderType {
-  GOOGLE
-  APPLE
-  LOCAL
-  X
+  USERTOKEN
+  STRIPESUBSCRIPTION
 }
 
 enum PaymentType {
@@ -43,9 +35,9 @@ enum PaymentType {
 
 model UserToken {
   id         Int      @id @default(autoincrement())
-  token      String   @db.Uuid
+  token      String   @unique @db.Uuid
   user       User     @relation(fields: [user_id], references: [id])
-  user_id    String   @db.Uuid
+  user_id    Int
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -54,7 +46,8 @@ model UserToken {
 
 model Session {
   id         Int      @id @default(autoincrement())
-  user_id    String   @db.Uuid
+  user_id    Int
+  session_ip String
   user       User     @relation(fields: [user_id], references: [id])
   token      String   @unique
   created_at DateTime @default(now())
@@ -64,7 +57,8 @@ model Session {
 }
 
 model User {
-  id                  String              @id @db.Uuid
+  id                  Int                 @id @default(autoincrement())
+  auth0_id            String              @unique
   name                String              @db.Text
   email               String?             @unique @db.Text
   document            String?             @unique @db.VarChar(14)
@@ -73,37 +67,22 @@ model User {
   password            String?             @db.Text
   avatar              String?             @db.Text
   roles               UserRoles[]         @default([USER])
-  birth_date          DateTime            @db.Date
+  birth_date          DateTime?           @db.Date
   created_at          DateTime            @default(now())
   updated_at          DateTime            @updatedAt
   deleted_at          DateTime?           @db.Date
   lgpd_excluded_at    DateTime?           @db.Date
   user_tokens         UserToken[]
   stripe_subscription StripeSubscription?
-  provider            Provider[]
   address             UserAddress[]
   session             Session[]
 
   @@map("users")
 }
 
-model Provider {
-  id          Int          @id @default(autoincrement())
-  provider    ProviderType
-  provider_id String
-  user        User         @relation(fields: [user_id], references: [id])
-  user_id     String       @unique @db.Uuid
-  created_at  DateTime     @default(now())
-  updated_at  DateTime     @updatedAt
-
-  @@unique([provider, provider_id])
-  @@index([provider])
-  @@map("providers")
-}
-
 model StripeSubscription {
   id                  Int       @id @default(autoincrement())
-  user_id             String    @unique @db.Uuid
+  user_id             Int       @unique
   user                User      @relation(fields: [user_id], references: [id])
   customer_id         String    @unique
   subscription_id     String    @unique
@@ -119,7 +98,7 @@ model StripeSubscription {
 
 model UserAddress {
   id           Int      @id @default(autoincrement())
-  user_id      String   @db.Uuid
+  user_id      Int
   address      String   @db.Text
   cep          String   @db.Text
   complement   String?  @db.Text

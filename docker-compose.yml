@@ -3,7 +3,7 @@ version: '3.8'
 services:
   postgres:
     image: postgres:latest
-    container_name: oauth-db
+    container_name: sirius-db
     restart: always
     tty: true
     ports:
@@ -12,5 +12,5 @@ services:
       - .docker/dbdata:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=oauth
+      - POSTGRES_PASSWORD=sirius
+      - POSTGRES_DB=postgres
