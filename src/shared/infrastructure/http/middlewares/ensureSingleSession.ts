@@ -9,31 +9,33 @@ export default async function ensureSingleSession(
   next: NextFunction,
 ): Promise<void> {
   requiresAuth()(req, res, async () => {
-    try {
-      // Obtenha o token do id_token
-      const sessionToken = req.oidc.idToken; // Ajuste conforme a forma como você obtém o token
+    // Obtenha o token do id_token
+    const sessionId = req.session?.id; // Ajuste conforme a forma como você obtém o token
+    const idToken = req.oidc.idToken;
+    const userRequest = req.oidc.user;
 
-      if (!sessionToken) {
-        return res.redirect('/login'); // Redireciona para login se o token não estiver presente
+    const user = await prismaService.user.findUnique({
+      where: {
+        auth0_id: userRequest.sub,
+      },
+    });
+    if (user) {
+      if (sessionId) {
+        // Obtenha a sessão do banco de dados
+        const userSession = await prismaService.session.findUnique({
+          where: {
+            user_id: user.id,
+          },
+        });
+        if (userSession) {
+          if (userSession.session_id != idToken) {
+            console.log('Deslogado pelo middleware');
+            return res.oidc.logout({ returnTo: '/login' });
+          }
+        }
       }
-
-      // Obtenha a sessão do banco de dados usando o token
-      const userSession = await prismaService.session.findUnique({
-        where: {
-          token: sessionToken,
-        },
-      });
-
-      // Verifique se a sessão é válida
-      if (!userSession || userSession.expires_at < new Date()) {
-        return res.redirect('/login'); // Redireciona para login se a sessão não for encontrada ou estiver expirada
-      }
-
-      // Se tudo estiver correto, prossiga com a requisição
-      return next();
-    } catch (error) {
-      console.error('Error in ensureSingleSession middleware:', error);
-      return res.redirect('/login'); // Redireciona para login em caso de erro
     }
+    // Se tudo estiver correto, prossiga com a requisição
+    return next();
   });
 }

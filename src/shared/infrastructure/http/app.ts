@@ -5,14 +5,28 @@ import routes from './routes';
 import DomainError from '@/shared/errors/domain-error';
 import { NotFoundError } from '@/shared/application/errors/not-found-error';
 import ApplicationError from '@/shared/errors/application-error';
-import { auth } from 'express-openid-connect';
+import { auth, requiresAuth } from 'express-openid-connect';
 import { prismaService } from '../database/prisma/prisma.service';
-import ensureSingleSession from './middlewares/ensureSingleSession';
 import { env } from '../env-config/env';
+import session from 'express-session';
+import ensureSingleSession from './middlewares/ensureSingleSession';
 
 const app = express();
 
 app.use(express.json());
+
+app.use(
+  session({
+    secret: 'Make sure to add SESSION_SECRET to your .env file', // Make sure to add SESSION_SECRET to your .env file
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: true,
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+    },
+  }),
+);
 
 const config = {
   authRequired: false,
@@ -23,6 +37,7 @@ const config = {
   issuerBaseURL: env.AUTH0_ISSUER_BASE_URL,
   afterCallback: async (req: Request, res: Response, session: any) => {
     const idToken = session.id_token;
+
     if (!idToken) {
       throw new Error('ID token not found in session');
     }
@@ -38,12 +53,12 @@ const config = {
       email: decodedToken.email,
     };
 
-    const existingUser = await prismaService.user.findUnique({
+    let existingUser = await prismaService.user.findUnique({
       where: { auth0_id: user.sub },
     });
 
     if (!existingUser) {
-      await prismaService.user.create({
+      existingUser = await prismaService.user.create({
         data: {
           auth0_id: user.sub,
           name: user.name,
@@ -52,91 +67,127 @@ const config = {
       });
     }
 
-    const currentSession = await prismaService.session.findMany({
-      where: { user_id: existingUser.id },
-    });
-
-    for (const sessionRecord of currentSession) {
-      await prismaService.recordSession.create({
-        data: {
-          user_id: sessionRecord.user_id,
-          session_ip: sessionRecord.session_ip,
-          token: sessionRecord.token,
-          action: sessionRecord.action,
-          created_at: sessionRecord.created_at,
-          expired_in: sessionRecord.expires_at,
-        },
+    if (existingUser) {
+      const currentSession = await prismaService.session.findUnique({
+        where: { user_id: existingUser.id },
       });
+      if (currentSession) {
+        if (currentSession.session_id == idToken) {
+          console.log('idToken não é único');
+        }
+        await prismaService.recordSession.create({
+          data: {
+            user_id: currentSession.user_id,
+            session_ip: currentSession.session_ip,
+            session_id: currentSession.session_id,
+            action: currentSession.action,
+            created_at: currentSession.created_at,
+            expired_in: currentSession.expires_at,
+          },
+        });
+
+        await prismaService.session.delete({
+          where: { user_id: existingUser.id },
+        });
+      }
     }
-
-    await prismaService.session.deleteMany({
-      where: { user_id: existingUser.id },
-    });
-
     const sessionExpiry = new Date(decodedToken.exp * 1000);
-
     await prismaService.session.create({
       data: {
         user_id: existingUser.id,
         session_ip: req.ip,
-        token: idToken,
+        session_id: idToken,
         expires_at: sessionExpiry,
       },
     });
+    req.session.id = idToken;
 
-    session.sessionToken = idToken;
-
+    session.session_id = session.sid;
     return session;
   },
 };
 
+app.use(auth(config));
+
 routes.get('/', (req, res) => {
   return res.json({ message: 'Hello World!' });
 });
-app.use(auth(config));
+
+app.get('/login', (req, res) => {
+  res.oidc.login({
+    returnTo: 'http://localhost:3333/profile',
+  });
+});
 
 app.use(ensureSingleSession);
-
 app.use(routes);
 
-app.get('/profile', (req, res) => {
+app.get('/profile', requiresAuth(), (req, res) => {
   res.json({
     is_authenticated: req.oidc.isAuthenticated(),
     user: req.oidc.user,
   });
 });
-app.get('/sair', async (req, res) => {
-  const userId = req.oidc.user.sub;
+app.get('/sair', requiresAuth(), async (req, res) => {
+  const auth0Id = req.oidc.user.sub;
+  const user = await prismaService.user.findUnique({
+    where: {
+      auth0_id: auth0Id,
+    },
+  });
 
-  if (userId) {
-    const existingUser = await prismaService.user.findUnique({
-      where: { auth0_id: userId },
+  const currentSession = await prismaService.session.findUnique({
+    where: { user_id: user.id },
+  });
+
+  if (currentSession) {
+    await prismaService.recordSession.create({
+      data: {
+        user_id: currentSession.user_id,
+        session_ip: currentSession.session_ip,
+        session_id: currentSession.session_id,
+        created_at: currentSession.created_at,
+        expired_in: currentSession.expires_at,
+      },
     });
-
-    if (existingUser) {
-      const currentSession = await prismaService.session.findMany({
-        where: { user_id: existingUser.id },
-      });
-
-      for (const sessionRecord of currentSession) {
-        await prismaService.recordSession.create({
-          data: {
-            user_id: sessionRecord.user_id,
-            session_ip: sessionRecord.session_ip,
-            token: sessionRecord.token,
-            created_at: sessionRecord.created_at,
-            expired_in: sessionRecord.expires_at,
-          },
-        });
-      }
-      await prismaService.session.deleteMany({
-        where: { user_id: existingUser.id },
-      });
-    }
   }
 
-  res.oidc.logout({ returnTo: '/' });
+  await prismaService.session.delete({
+    where: { user_id: user.id },
+  });
+  res.oidc.logout({ returnTo: '/login' });
 });
+
+app.get('/logout', requiresAuth(), async (req, res) => {
+  const auth0Id = req.oidc.user.sub;
+  const user = await prismaService.user.findUnique({
+    where: {
+      auth0_id: auth0Id,
+    },
+  });
+
+  const currentSession = await prismaService.session.findUnique({
+    where: { user_id: user.id },
+  });
+
+  if (currentSession) {
+    await prismaService.recordSession.create({
+      data: {
+        user_id: currentSession.user_id,
+        session_ip: currentSession.session_ip,
+        session_id: currentSession.session_id,
+        created_at: currentSession.created_at,
+        expired_in: currentSession.expires_at,
+      },
+    });
+  }
+
+  await prismaService.session.delete({
+    where: { user_id: user.id },
+  });
+  res.oidc.logout({ returnTo: '/login' });
+});
+
 app.use((req: Request, res: Response, next: NextFunction) => {
   next(new NotFoundError(`Cannot find ${req.originalUrl} on this server`));
 });

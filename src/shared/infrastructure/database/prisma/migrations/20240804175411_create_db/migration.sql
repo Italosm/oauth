@@ -2,6 +2,9 @@
 CREATE TYPE "UserRoles" AS ENUM ('OWNER', 'ADMIN', 'USER', 'SAC', 'GUEST');
 
 -- CreateEnum
+CREATE TYPE "Action" AS ENUM ('LOGIN', 'LOGOUT');
+
+-- CreateEnum
 CREATE TYPE "EntityType" AS ENUM ('USER', 'USERTOKEN', 'STRIPESUBSCRIPTION');
 
 -- CreateEnum
@@ -23,11 +26,25 @@ CREATE TABLE "sessions" (
     "id" SERIAL NOT NULL,
     "user_id" INTEGER NOT NULL,
     "session_ip" TEXT NOT NULL,
-    "token" TEXT NOT NULL,
+    "session_id" TEXT NOT NULL,
+    "action" "Action" NOT NULL DEFAULT 'LOGIN',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "expires_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "record_sessions" (
+    "id" SERIAL NOT NULL,
+    "user_id" INTEGER NOT NULL,
+    "session_ip" TEXT NOT NULL,
+    "session_id" TEXT NOT NULL,
+    "action" "Action" NOT NULL DEFAULT 'LOGOUT',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expired_in" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "record_sessions_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -42,7 +59,7 @@ CREATE TABLE "users" (
     "password" TEXT,
     "avatar" TEXT,
     "roles" "UserRoles"[] DEFAULT ARRAY['USER']::"UserRoles"[],
-    "birth_date" DATE NOT NULL,
+    "birth_date" DATE,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" DATE,
@@ -87,7 +104,13 @@ CREATE TABLE "users_address" (
 CREATE UNIQUE INDEX "users_tokens_token_key" ON "users_tokens"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sessions_token_key" ON "sessions"("token");
+CREATE UNIQUE INDEX "sessions_user_id_key" ON "sessions"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "sessions_session_id_key" ON "sessions"("session_id");
+
+-- CreateIndex
+CREATE INDEX "record_sessions_user_id_idx" ON "record_sessions"("user_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_auth0_id_key" ON "users"("auth0_id");
@@ -115,6 +138,9 @@ ALTER TABLE "users_tokens" ADD CONSTRAINT "users_tokens_user_id_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "record_sessions" ADD CONSTRAINT "record_sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "stripe_subscription" ADD CONSTRAINT "stripe_subscription_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

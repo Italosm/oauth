@@ -51,10 +51,10 @@ model UserToken {
 
 model Session {
   id         Int      @id @default(autoincrement())
-  user_id    Int
+  user_id    Int      @unique
   session_ip String
   user       User     @relation(fields: [user_id], references: [id])
-  token      String   @unique
+  session_id String   @unique
   action     Action   @default(LOGIN)
   created_at DateTime @default(now())
   expires_at DateTime
@@ -67,7 +67,7 @@ model RecordSession {
   user_id    Int
   session_ip String
   user       User     @relation(fields: [user_id], references: [id])
-  token      String   @unique
+  session_id String
   action     Action   @default(LOGOUT)
   created_at DateTime @default(now())
   expired_in DateTime
