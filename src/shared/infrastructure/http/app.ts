@@ -114,7 +114,7 @@ routes.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  res.oidc.login({
+  return res.oidc.login({
     returnTo: 'http://localhost:3333/profile',
   });
 });
@@ -122,13 +122,13 @@ app.get('/login', (req, res) => {
 app.use(ensureSingleSession);
 app.use(routes);
 
-app.get('/profile', requiresAuth(), (req, res) => {
-  res.json({
+app.get('/profile', (req, res) => {
+  return res.json({
     is_authenticated: req.oidc.isAuthenticated(),
     user: req.oidc.user,
   });
 });
-app.get('/sair', requiresAuth(), async (req, res) => {
+app.get('/sair', async (req, res) => {
   const auth0Id = req.oidc.user.sub;
   const user = await prismaService.user.findUnique({
     where: {
@@ -155,37 +155,7 @@ app.get('/sair', requiresAuth(), async (req, res) => {
   await prismaService.session.delete({
     where: { user_id: user.id },
   });
-  res.oidc.logout({ returnTo: '/login' });
-});
-
-app.get('/logout', requiresAuth(), async (req, res) => {
-  const auth0Id = req.oidc.user.sub;
-  const user = await prismaService.user.findUnique({
-    where: {
-      auth0_id: auth0Id,
-    },
-  });
-
-  const currentSession = await prismaService.session.findUnique({
-    where: { user_id: user.id },
-  });
-
-  if (currentSession) {
-    await prismaService.recordSession.create({
-      data: {
-        user_id: currentSession.user_id,
-        session_ip: currentSession.session_ip,
-        session_id: currentSession.session_id,
-        created_at: currentSession.created_at,
-        expired_in: currentSession.expires_at,
-      },
-    });
-  }
-
-  await prismaService.session.delete({
-    where: { user_id: user.id },
-  });
-  res.oidc.logout({ returnTo: '/login' });
+  return res.oidc.logout({ returnTo: '/login' });
 });
 
 app.use((req: Request, res: Response, next: NextFunction) => {
