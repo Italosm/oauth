@@ -5,7 +5,7 @@ import routes from './routes';
 import DomainError from '@/shared/errors/domain-error';
 import { NotFoundError } from '@/shared/application/errors/not-found-error';
 import ApplicationError from '@/shared/errors/application-error';
-import { auth, requiresAuth } from 'express-openid-connect';
+import { auth } from 'express-openid-connect';
 import { prismaService } from '../database/prisma/prisma.service';
 import { env } from '../env-config/env';
 import session from 'express-session';
@@ -35,6 +35,9 @@ const config = {
   baseURL: env.AUTH0_BASE_URL,
   clientID: env.AUTH0_CLIENT_ID,
   issuerBaseURL: env.AUTH0_ISSUER_BASE_URL,
+  routes: {
+    login: 'false',
+  },
   afterCallback: async (req: Request, res: Response, session: any) => {
     const idToken = session.id_token;
 
@@ -109,13 +112,9 @@ const config = {
 
 app.use(auth(config));
 
-routes.get('/', (req, res) => {
-  return res.json({ message: 'Hello World!' });
-});
-
 app.get('/login', (req, res) => {
   return res.oidc.login({
-    returnTo: 'http://localhost:3333/profile',
+    returnTo: '/profile',
   });
 });
 
